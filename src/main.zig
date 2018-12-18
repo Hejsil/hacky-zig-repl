@@ -35,7 +35,7 @@ const params = []Param{
 
 fn usage(stream: var) !void {
     try stream.write(
-        \\Usage: hacky-zig-repl [OPTION]... FILE
+        \\Usage: hacky-zig-repl [OPTION]...
         \\Allows repl like functionality for Zig.
         \\
         \\Options:
