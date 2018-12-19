@@ -44,18 +44,11 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-const repl_template =
-    \\use @import("std");
-    \\pub fn main() anyerror!void {{
-    \\    const __repl_stdout = &(try io.getStdOut()).outStream().stream;
-    \\{}
-    \\{}
-    \\    try __repl_stdout.print("_{} = {{}}\n", _{});
-    \\}}
-    \\
-    ;
+const repl_template = @embedFile("template.zig");
 
 pub fn main() anyerror!void {
+    @setEvalBranchQuota(10000);
+
     const stdout = &(try io.getStdOut()).outStream().stream;
     const stderr = &(try io.getStdErr()).outStream().stream;
 
