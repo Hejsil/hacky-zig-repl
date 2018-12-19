@@ -2,6 +2,7 @@ const clap = @import("zig-clap");
 const std = @import("std");
 
 const base64 = std.base64;
+const crypto = std.crypto;
 const debug = std.debug;
 const fmt = std.fmt;
 const heap = std.heap;
@@ -12,6 +13,8 @@ const os = std.os;
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
+
+pub const base64_encoder = base64.Base64Encoder.init("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+=", '!');
 
 const params = []Param{
     Param.flag(
@@ -88,19 +91,23 @@ pub fn main() anyerror!void {
 
         const assignment = try fmt.allocPrint(allocator, "const _{} = {};\n", i, line);
 
-        const encoded_len = base64.Base64Encoder.calcSize(last_run.len);
-        const encouded_src = try allocator.alloc(u8, encoded_len);
-        base64.standard_encoder.encode(encouded_src, last_run);
+        var crypt_src: [224/8]u8 = undefined;
+        crypto.Blake2s224.hash(last_run, crypt_src[0..]);
 
-        const file_name = try fmt.allocPrint(allocator, "{}/{}.zig", tmp_dir, encouded_src);
+        var encoded_src: [base64.Base64Encoder.calcSize(crypt_src.len)]u8 = undefined;
+        base64_encoder.encode(encoded_src[0..], crypt_src);
+
+        const file_name = try fmt.allocPrint(allocator, "{}/{}.zig", tmp_dir, encoded_src);
+        if (verbose)
+            debug.warn("writing source to '{}'\n", file_name);
+
         const file = try os.File.openWrite(file_name);
         defer file.close();
-
         const stream = &file.outStream().stream;
         try stream.print(repl_template, last_run, assignment, i, i);
 
         if (verbose)
-            debug.warn("{} run {}\n", zig_path, file_name);
+            debug.warn("running command '{} run {}'\n", zig_path, file_name);
         run(allocator, [][]const u8{
             zig_path,
             "run",
