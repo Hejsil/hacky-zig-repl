@@ -59,10 +59,9 @@ pub fn main() anyerror!void {
     defer da.deinit();
 
     var arg_iter = clap.args.OsIterator.init(&da.allocator);
-    const iter = &arg_iter.iter;
-    _ = iter.next() catch undefined;
+    _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(&da.allocator, clap.args.OsIterator.Error, iter) catch |err| {
+    var args = Clap.parse(&da.allocator, clap.args.OsIterator, &arg_iter) catch |err| {
         usage(stderr) catch {};
         return err;
     };
