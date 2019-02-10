@@ -121,7 +121,6 @@ pub fn main() anyerror!void {
     }
 }
 
-
 fn run(allocator: *mem.Allocator, argv: []const []const u8) !void {
     const process = try os.ChildProcess.init(argv, allocator);
     defer process.deinit();
