@@ -14,26 +14,31 @@ const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
 
-pub const base64_encoder = base64.Base64Encoder.init("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+=", '!');
+const base64_encoder = base64.Base64Encoder.init("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+=", '!');
 
-const params = []Param{
-    Param.flag(
-        "display this help text and exit",
-        Names.both("help"),
-    ),
-    Param.option(
-        "override the folder used to stored temporary files",
-        Names.long("tmp"),
-    ),
-    Param.flag(
-        "print commands before executing them",
-        Names.both("verbose"),
-    ),
-    Param.option(
-        "override the path to the Zig executable",
-        Names.long("zig"),
-    ),
-    Param.positional(""),
+const params = [_]Param{
+    Param{
+        .id = "display this help text and exit",
+        .names = Names{ .short = 'h', .long = "help" },
+    },
+    Param{
+        .id = "override the folder used to stored temporary files",
+        .names = Names{ .short = 't', .long = "tmp" },
+        .takes_value = true,
+    },
+    Param{
+        .id = "print commands before executing them",
+        .names = Names{ .short = 'v', .long = "verbose" },
+    },
+    Param{
+        .id = "override the path to the Zig executable",
+        .names = Names{ .long = "zig" },
+        .takes_value = true,
+    },
+    Param{
+        .id = "",
+        .takes_value = true,
+    },
 };
 
 fn usage(stream: var) !void {
@@ -100,14 +105,14 @@ pub fn main() anyerror!void {
         if (verbose)
             debug.warn("writing source to '{}'\n", file_name);
 
-        const file = try os.File.openWrite(file_name);
+        const file = try std.fs.File.openWrite(file_name);
         defer file.close();
         const stream = &file.outStream().stream;
         try stream.print(repl_template, last_run, assignment, i, i);
 
         if (verbose)
             debug.warn("running command '{} run {}'\n", zig_path, file_name);
-        run(allocator, [][]const u8{
+        run(allocator, [_][]const u8{
             zig_path,
             "run",
             file_name,
@@ -122,12 +127,12 @@ pub fn main() anyerror!void {
 }
 
 fn run(allocator: *mem.Allocator, argv: []const []const u8) !void {
-    const process = try os.ChildProcess.init(argv, allocator);
+    const process = try std.ChildProcess.init(argv, allocator);
     defer process.deinit();
 
     try process.spawn();
     switch (try process.wait()) {
-        os.ChildProcess.Term.Exited => |code| {
+        std.ChildProcess.Term.Exited => |code| {
             if (code != 0)
                 return error.ProcessFailed;
         },
