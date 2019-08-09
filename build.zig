@@ -3,7 +3,7 @@ const Builder = @import("std").build.Builder;
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
     const exe = b.addExecutable("hacky-zig-repl", "src/main.zig");
-    exe.addPackagePath("zig-clap", "lib/zig-clap/clap.zig");
+    exe.addPackagePath("zig-clap", "../zig-clap/clap.zig");
     exe.setBuildMode(mode);
 
     const run_cmd = exe.run();

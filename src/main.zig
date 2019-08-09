@@ -60,13 +60,11 @@ pub fn main() anyerror!void {
     const stdout = &(try io.getStdOut()).outStream().stream;
     const stderr = &(try io.getStdErr()).outStream().stream;
 
-    var da = std.heap.DirectAllocator.init();
-    defer da.deinit();
-
-    var arg_iter = clap.args.OsIterator.init(&da.allocator);
+    const da = std.heap.direct_allocator;
+    var arg_iter = clap.args.OsIterator.init(da);
     _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(&da.allocator, clap.args.OsIterator, &arg_iter) catch |err| {
+    var args = Clap.parse(da, clap.args.OsIterator, &arg_iter) catch |err| {
         usage(stderr) catch {};
         return err;
     };
@@ -78,12 +76,12 @@ pub fn main() anyerror!void {
     const tmp_dir = args.option("--tmp") orelse "/tmp";
     const verbose = args.flag("--verbose");
 
-    var last_run_buf = try std.Buffer.initSize(&da.allocator, 0);
-    var line_buf = try std.Buffer.initSize(&da.allocator, 0);
+    var last_run_buf = try std.Buffer.initSize(da, 0);
+    var line_buf = try std.Buffer.initSize(da, 0);
     var i: usize = 0;
     while (true) : (line_buf.shrink(0)) {
         const last_run = last_run_buf.toSlice();
-        var arena = heap.ArenaAllocator.init(&da.allocator);
+        var arena = heap.ArenaAllocator.init(da);
         defer arena.deinit();
 
         const allocator = &arena.allocator;

@@ -7,13 +7,15 @@ pub fn main() !void {{
 
 fn __repl_print_stdout(v: var) !void {{
     const stdout = &(try io.getStdOut()).outStream().stream;
-    try stdout.print("_{} = ");
+    try stdout.write("_{} = ");
     try fmt.formatType(
         v,
         "",
+        fmt.FormatOptions{{}},
         stdout,
-        os.File.OutStream.Error,
+        fs.File.OutStream.Error,
         stdout.writeFn,
+        3,
     );
     try stdout.print("\n");
 }}
