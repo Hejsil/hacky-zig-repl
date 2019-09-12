@@ -10,33 +10,18 @@ const io = std.io;
 const mem = std.mem;
 const os = std.os;
 
-const Clap = clap.ComptimeClap([]const u8, params);
+const Clap = clap.ComptimeClap(clap.Help, params);
 const Names = clap.Names;
-const Param = clap.Param([]const u8);
+const Param = clap.Param(clap.Help);
 
 const base64_encoder = base64.Base64Encoder.init("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+=", '!');
 
 const params = [_]Param{
+    clap.parseParam("-h, --help       display this help text and exit                   ") catch unreachable,
+    clap.parseParam("-t, --tmp <DIR>  override the folder used to stored temporary files") catch unreachable,
+    clap.parseParam("-v, --verbose    print commands before executing them              ") catch unreachable,
+    clap.parseParam("    --zig <EXE>  override the path to the Zig executable           ") catch unreachable,
     Param{
-        .id = "display this help text and exit",
-        .names = Names{ .short = 'h', .long = "help" },
-    },
-    Param{
-        .id = "override the folder used to stored temporary files",
-        .names = Names{ .short = 't', .long = "tmp" },
-        .takes_value = true,
-    },
-    Param{
-        .id = "print commands before executing them",
-        .names = Names{ .short = 'v', .long = "verbose" },
-    },
-    Param{
-        .id = "override the path to the Zig executable",
-        .names = Names{ .long = "zig" },
-        .takes_value = true,
-    },
-    Param{
-        .id = "",
         .takes_value = true,
     },
 };
