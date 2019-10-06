@@ -37,7 +37,30 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-const repl_template = @embedFile("template.zig");
+const repl_template =
+    \\use @import("std");
+    \\pub fn main() !void {{
+    \\{}
+    \\{}
+    \\    try __repl_print_stdout(_{});
+    \\}}
+    \\
+    \\fn __repl_print_stdout(v: var) !void {{
+    \\    const stdout = &(try io.getStdOut()).outStream().stream;
+    \\    try stdout.write("_{} = ");
+    \\    try fmt.formatType(
+    \\        v,
+    \\        "",
+    \\        fmt.FormatOptions{{}},
+    \\        stdout,
+    \\        fs.File.OutStream.Error,
+    \\        stdout.writeFn,
+    \\        3,
+    \\    );
+    \\    try stdout.print("\n");
+    \\}}
+    \\
+;
 
 pub fn main() anyerror!void {
     @setEvalBranchQuota(10000);
@@ -78,7 +101,7 @@ pub fn main() anyerror!void {
 
         const assignment = try fmt.allocPrint(allocator, "const _{} = {};\n", i, line);
 
-        var crypt_src: [224/8]u8 = undefined;
+        var crypt_src: [224 / 8]u8 = undefined;
         crypto.Blake2s224.hash(last_run, crypt_src[0..]);
 
         var encoded_src: [base64.Base64Encoder.calcSize(crypt_src.len)]u8 = undefined;
