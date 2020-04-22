@@ -5,16 +5,16 @@ const base64 = std.base64;
 const crypto = std.crypto;
 const debug = std.debug;
 const fmt = std.fmt;
+const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const math = std.math;
 const mem = std.mem;
 const os = std.os;
 
-const Clap = clap.ComptimeClap(clap.Help, params);
+const Clap = clap.ComptimeClap(clap.Help, &params);
 const Names = clap.Names;
 const Param = clap.Param(clap.Help);
-
-const base64_encoder = base64.Base64Encoder.init("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+=", '!');
 
 const params = [_]Param{
     clap.parseParam("-h, --help       display this help text and exit                   ") catch unreachable,
@@ -27,18 +27,18 @@ const params = [_]Param{
 };
 
 fn usage(stream: var) !void {
-    try stream.write(
+    try stream.writeAll(
         \\Usage: hacky-zig-repl [OPTION]...
         \\Allows repl like functionality for Zig.
         \\
         \\Options:
         \\
     );
-    try clap.help(stream, params);
+    try clap.help(stream, &params);
 }
 
 const repl_template =
-    \\use @import("std");
+    \\usingnamespace @import("std");
     \\pub fn main() !void {{
     \\{}
     \\{}
@@ -46,18 +46,16 @@ const repl_template =
     \\}}
     \\
     \\fn __repl_print_stdout(v: var) !void {{
-    \\    const stdout = &(try io.getStdOut()).outStream().stream;
-    \\    try stdout.write("_{} = ");
+    \\    const stdout = io.getStdOut().outStream();
+    \\    try stdout.writeAll("_{} = ");
     \\    try fmt.formatType(
     \\        v,
     \\        "",
     \\        fmt.FormatOptions{{}},
     \\        stdout,
-    \\        fs.File.OutStream.Error,
-    \\        stdout.writeFn,
     \\        3,
     \\    );
-    \\    try stdout.print("\n");
+    \\    try stdout.writeAll("\n");
     \\}}
     \\
 ;
@@ -65,14 +63,13 @@ const repl_template =
 pub fn main() anyerror!void {
     @setEvalBranchQuota(10000);
 
-    const stdout = &(try io.getStdOut()).outStream().stream;
-    const stderr = &(try io.getStdErr()).outStream().stream;
+    const stdin = io.getStdIn().inStream();
+    const stdout = io.getStdOut().outStream();
+    const stderr = io.getStdErr().outStream();
 
-    const da = std.heap.direct_allocator;
-    var arg_iter = clap.args.OsIterator.init(da);
-    _ = arg_iter.next() catch undefined;
-
-    var args = Clap.parse(da, clap.args.OsIterator, &arg_iter) catch |err| {
+    const pa = std.heap.page_allocator;
+    var arg_iter = try clap.args.OsIterator.init(pa);
+    var args = Clap.parse(pa, clap.args.OsIterator, &arg_iter) catch |err| {
         usage(stderr) catch {};
         return err;
     };
@@ -84,50 +81,51 @@ pub fn main() anyerror!void {
     const tmp_dir = args.option("--tmp") orelse "/tmp";
     const verbose = args.flag("--verbose");
 
-    var last_run_buf = try std.Buffer.initSize(da, 0);
-    var line_buf = try std.Buffer.initSize(da, 0);
+    var last_run_buf = std.ArrayList(u8).init(pa);
+    var line_buf = std.ArrayList(u8).init(pa);
     var i: usize = 0;
     while (true) : (line_buf.shrink(0)) {
-        const last_run = last_run_buf.toSlice();
-        var arena = heap.ArenaAllocator.init(da);
+        const last_run = last_run_buf.items;
+        var arena = heap.ArenaAllocator.init(pa);
         defer arena.deinit();
 
         const allocator = &arena.allocator;
 
-        try stdout.write(">> ");
-        const line = mem.trim(u8, try io.readLine(&line_buf), " \t");
+        // TODO: proper readline prompt
+        try stdout.writeAll(">> ");
+        stdin.readUntilDelimiterArrayList(&line_buf, '\n', math.maxInt(usize)) catch |err| switch (err) {
+            error.EndOfStream => break,
+            else => |e| return e,
+        };
+
+        const line = mem.trim(u8, line_buf.items, " \t");
         if (line.len == 0)
             continue;
 
-        const assignment = try fmt.allocPrint(allocator, "const _{} = {};\n", i, line);
+        const assignment = try fmt.allocPrint(allocator, "const _{} = {};\n", .{ i, line });
 
         var crypt_src: [224 / 8]u8 = undefined;
-        crypto.Blake2s224.hash(last_run, crypt_src[0..]);
+        crypto.Blake2s224.hash(last_run, &crypt_src);
 
         var encoded_src: [base64.Base64Encoder.calcSize(crypt_src.len)]u8 = undefined;
-        base64_encoder.encode(encoded_src[0..], crypt_src);
+        fs.base64_encoder.encode(&encoded_src, &crypt_src);
 
-        const file_name = try fmt.allocPrint(allocator, "{}/{}.zig", tmp_dir, encoded_src);
+        const file_name = try fmt.allocPrint(allocator, "{}/{}.zig", .{ tmp_dir, &encoded_src });
         if (verbose)
-            debug.warn("writing source to '{}'\n", file_name);
+            debug.warn("writing source to '{}'\n", .{file_name});
 
-        const file = try std.fs.File.openWrite(file_name);
+        const file = try std.fs.cwd().createFile(file_name, .{});
         defer file.close();
-        const stream = &file.outStream().stream;
-        try stream.print(repl_template, last_run, assignment, i, i);
+        try file.outStream().print(repl_template, .{ last_run, assignment, i, i });
 
         if (verbose)
-            debug.warn("running command '{} run {}'\n", zig_path, file_name);
-        run(allocator, [_][]const u8{
-            zig_path,
-            "run",
-            file_name,
-        }) catch |err| {
-            debug.warn("error: {}\n", err);
+            debug.warn("running command '{} run {}'\n", .{ zig_path, file_name });
+        run(allocator, &[_][]const u8{ zig_path, "run", file_name }) catch |err| {
+            debug.warn("error: {}\n", .{err});
             continue;
         };
 
-        try last_run_buf.append(assignment);
+        try last_run_buf.appendSlice(assignment);
         i += 1;
     }
 }
